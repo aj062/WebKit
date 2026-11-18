@@ -3291,6 +3291,11 @@ class CompileWebKit(shell.Compile, AddToLogMixin, ShellMixin):
         else:
             self.command = build_command
 
+        if os.path.exists('/tmp/uat-disk-space-test/fake-disk-full'):
+            if self.name == CompileWebKit.name:
+                self.command = self.shell_command("echo \"<unknown>:0: error: unable to open output file 'WebKitBuild/SwiftExplicitPrecompiledModules/WebCore_Private-UATTEST.pcm': 'No space left on device'\"; exit 1")
+            else:
+                self.command = self.shell_command("echo 'UAT test hook: skipped the build without the change'")
         rc = yield super().run()
         if self.error_lines:
             yield self._addToLog('errors', '\n'.join(self.error_lines) + '\n')
@@ -3337,6 +3342,8 @@ class CompileWebKit(shell.Compile, AddToLogMixin, ShellMixin):
             else:
                 steps_to_add.append(CompileWebKitWithoutChange())
             steps_to_add.append(AnalyzeCompileWebKitResults())
+        elif os.path.exists('/tmp/uat-disk-space-test/skip-follow-ups'):
+            pass
         else:
             triggers = self.getProperty('triggers', None)
             if triggers or not self.skipUpload:
@@ -7410,7 +7417,10 @@ class EnsureFreeDiskSpace(shell.ShellCommand):
     def run(self):
         self.log_observer = logobserver.BufferLogObserver()
         self.addLogObserver('stdio', self.log_observer)
-        self.command = ['python3', 'Tools/CISupport/ensure-free-disk-space', '--minimum-free-gb', str(self.MINIMUM_FREE_GB)]
+        minimum_free_gb = self.MINIMUM_FREE_GB
+        if os.path.exists('/tmp/uat-disk-space-test/min-free-gb'):
+            minimum_free_gb = int(open('/tmp/uat-disk-space-test/min-free-gb').read().strip())
+        self.command = ['python3', 'Tools/CISupport/ensure-free-disk-space', '--minimum-free-gb', str(minimum_free_gb)]
         rc = yield super().run()
 
         report = self.parse_report(self.log_observer.getStdout())
